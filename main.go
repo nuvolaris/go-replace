@@ -23,21 +23,21 @@ var (
 	gitTag    = "<unknown>"
 )
 
-type changeset struct {
+type Changeset struct {
 	SearchPlain string
 	Search      *regexp.Regexp
 	Replace     string
 	MatchFound  bool
 }
 
-type changeresult struct {
-	File   fileitem
+type Changeresult struct {
+	File   Fileitem
 	Output string
 	Status bool
 	Error  error
 }
 
-type fileitem struct {
+type Fileitem struct {
 	Path   string
 	Output string
 }
@@ -75,7 +75,7 @@ var opts struct {
 var pathFilterDirectories = []string{"autom4te.cache", "blib", "_build", ".bzr", ".cdv", "cover_db", "CVS", "_darcs", "~.dep", "~.dot", ".git", ".hg", "~.nib", ".pc", "~.plst", "RCS", "SCCS", "_sgbak", ".svn", "_obj", ".idea"}
 
 // Apply changesets to file
-func applyChangesetsToFile(fileitem fileitem, changesets []changeset) (string, bool, error) {
+func applyChangesetsToFile(fileitem Fileitem, changesets []Changeset) (string, bool, error) {
 	var (
 		output string = ""
 		status bool   = true
@@ -109,7 +109,7 @@ func applyChangesetsToFile(fileitem fileitem, changesets []changeset) (string, b
 
 	// --mode=lineinfile
 	if opts.ModeIsLineInFile {
-		lifBuffer, lifStatus := handleLineInFile(changesets, buffer)
+		lifBuffer, lifStatus := HandleLineInFile(changesets, buffer)
 		if lifStatus {
 			buffer.Reset()
 			buffer.WriteString(lifBuffer.String())
@@ -125,7 +125,7 @@ func applyChangesetsToFile(fileitem fileitem, changesets []changeset) (string, b
 	}
 
 	if writeBufferToFile {
-		output, status = writeContentToFile(fileitem, buffer)
+		output, status = WriteContentToFile(fileitem, buffer)
 	} else {
 		output = fmt.Sprintf("%s no match", fileitem.Path)
 	}
@@ -134,21 +134,21 @@ func applyChangesetsToFile(fileitem fileitem, changesets []changeset) (string, b
 }
 
 // Apply changesets to file
-func applyTemplateToFile(fileitem fileitem, changesets []changeset) (string, bool, error) {
+func applyTemplateToFile(fileitem Fileitem, changesets []Changeset) (string, bool, error) {
 	// try open file
 	buffer, err := os.ReadFile(fileitem.Path)
 	if err != nil {
 		return "", false, err
 	}
 
-	content := parseContentAsTemplate(string(buffer), changesets)
+	content := ParseContentAsTemplate(string(buffer), changesets)
 
-	output, status := writeContentToFile(fileitem, content)
+	output, status := WriteContentToFile(fileitem, content)
 
 	return output, status, err
 }
 
-func applyChangesetsToLine(line string, changesets []changeset) (string, bool, bool) {
+func applyChangesetsToLine(line string, changesets []Changeset) (string, bool, bool) {
 	changed := false
 	skipLine := false
 
@@ -156,7 +156,7 @@ func applyChangesetsToLine(line string, changesets []changeset) (string, bool, b
 		// --once, only do changeset once if already applied to file
 		if opts.Once != "" && changeset.MatchFound {
 			// --once=unique, skip matching lines
-			if opts.Once == "unique" && searchMatch(line, changeset) {
+			if opts.Once == "unique" && SearchMatch(line, changeset) {
 				// matching line, not writing to buffer as requsted
 				skipLine = true
 				changed = true
@@ -164,7 +164,7 @@ func applyChangesetsToLine(line string, changesets []changeset) (string, bool, b
 			}
 		} else {
 			// search and replace
-			if searchMatch(line, changeset) {
+			if SearchMatch(line, changeset) {
 				// --mode=line or --mode=lineinfile
 				if opts.ModeIsReplaceLine || opts.ModeIsLineInFile {
 					if opts.RegexBackref {
@@ -179,7 +179,7 @@ func applyChangesetsToLine(line string, changesets []changeset) (string, bool, b
 					}
 				} else {
 					// replace only term inside line
-					line = replaceText(line, changeset)
+					line = ReplaceText(line, changeset)
 				}
 
 				changesets[i].MatchFound = true
@@ -292,7 +292,7 @@ func handleSpecialCliOptions(args []string) {
 	}
 }
 
-func actionProcessStdinReplace(changesets []changeset) int {
+func actionProcessStdinReplace(changesets []Changeset) int {
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -307,7 +307,7 @@ func actionProcessStdinReplace(changesets []changeset) int {
 	return 0
 }
 
-func actionProcessStdinTemplate(changesets []changeset) int {
+func actionProcessStdinTemplate(changesets []Changeset) int {
 	var buffer bytes.Buffer
 
 	scanner := bufio.NewScanner(os.Stdin)
@@ -315,13 +315,13 @@ func actionProcessStdinTemplate(changesets []changeset) int {
 		buffer.WriteString(scanner.Text() + "\n")
 	}
 
-	content := parseContentAsTemplate(buffer.String(), changesets)
+	content := ParseContentAsTemplate(buffer.String(), changesets)
 	fmt.Print(content.String())
 
 	return 0
 }
 
-func actionProcessFiles(changesets []changeset, fileitems []fileitem) int {
+func actionProcessFiles(changesets []Changeset, fileitems []Fileitem) int {
 	// check if there is at least one file to process
 	if len(fileitems) == 0 {
 		if opts.IgnoreEmpty {
@@ -335,12 +335,12 @@ func actionProcessFiles(changesets []changeset, fileitems []fileitem) int {
 	}
 
 	swg := sizedwaitgroup.New(8)
-	results := make(chan changeresult, len(fileitems))
+	results := make(chan Changeresult, len(fileitems))
 
 	// process file list
 	for _, file := range fileitems {
 		swg.Add()
-		go func(file fileitem, changesets []changeset) {
+		go func(file Fileitem, changesets []Changeset) {
 			var (
 				err    error
 				output string
@@ -353,7 +353,7 @@ func actionProcessFiles(changesets []changeset, fileitems []fileitem) int {
 				output, status, err = applyChangesetsToFile(file, changesets)
 			}
 
-			results <- changeresult{file, output, status, err}
+			results <- Changeresult{file, output, status, err}
 			swg.Done()
 		}(file, changesets)
 	}
@@ -388,8 +388,8 @@ func actionProcessFiles(changesets []changeset, fileitems []fileitem) int {
 	return 0
 }
 
-func buildChangesets() []changeset {
-	var changesets []changeset
+func buildChangesets() []Changeset {
+	var changesets []Changeset
 
 	if !opts.ModeIsTemplate {
 		if len(opts.Search) == 0 || len(opts.Replace) == 0 {
@@ -409,22 +409,22 @@ func buildChangesets() []changeset {
 		search := opts.Search[i]
 		replace := opts.Replace[i]
 
-		changeset := changeset{search, buildSearchTerm(search), replace, false}
+		changeset := Changeset{search, buildSearchTerm(search), replace, false}
 		changesets = append(changesets, changeset)
 	}
 
 	return changesets
 }
 
-func buildFileitems(args []string) []fileitem {
+func buildFileitems(args []string) []Fileitem {
 	var (
-		fileitems []fileitem
-		file      fileitem
+		fileitems []Fileitem
+		file      Fileitem
 	)
 
 	// Build filelist from arguments
 	for _, filepath := range args {
-		file = fileitem{filepath, filepath}
+		file = Fileitem{filepath, filepath}
 
 		if opts.Output != "" {
 			// use specific output
@@ -445,8 +445,8 @@ func buildFileitems(args []string) []fileitem {
 
 	// --path parsing
 	if opts.Path != "" {
-		searchFilesInPath(opts.Path, func(f os.FileInfo, filepath string) {
-			file := fileitem{filepath, filepath}
+		SearchFilesInPath(opts.Path, func(f os.FileInfo, filepath string) {
+			file := Fileitem{filepath, filepath}
 
 			if opts.OutputStripFileExt != "" {
 				// remove file ext from saving destination

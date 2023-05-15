@@ -14,7 +14,7 @@ type templateData struct {
 	Env map[string]string
 }
 
-func createTemplate() *template.Template {
+func CreateTemplate() *template.Template {
 	tmpl := template.New("base")
 	tmpl.Funcs(sprig.TxtFuncMap())
 	tmpl.Option("missingkey=zero")
@@ -22,10 +22,10 @@ func createTemplate() *template.Template {
 	return tmpl
 }
 
-func parseContentAsTemplate(templateContent string, changesets []changeset) bytes.Buffer {
+func ParseContentAsTemplate(templateContent string, changesets []Changeset) bytes.Buffer {
 	var content bytes.Buffer
 	data := generateTemplateData(changesets)
-	tmpl, err := createTemplate().Parse(templateContent)
+	tmpl, err := CreateTemplate().Parse(templateContent)
 	if err != nil {
 		logFatalErrorAndExit(err, 1)
 	}
@@ -38,7 +38,7 @@ func parseContentAsTemplate(templateContent string, changesets []changeset) byte
 	return content
 }
 
-func generateTemplateData(changesets []changeset) templateData {
+func generateTemplateData(changesets []Changeset) templateData {
 	// init
 	var ret templateData
 	ret.Arg = make(map[string]string)

@@ -18,12 +18,12 @@ func contains(slice []string, item string) bool {
 }
 
 // Checks if there is a match in content, based on search options
-func searchMatch(content string, changeset changeset) bool {
+func SearchMatch(content string, changeset Changeset) bool {
 	return changeset.Search.MatchString(content)
 }
 
 // Replace text in whole content based on search options
-func replaceText(content string, changeset changeset) string {
+func ReplaceText(content string, changeset Changeset) string {
 	// --regex-backrefs
 	if opts.RegexBackref {
 		return changeset.Search.ReplaceAllString(content, changeset.Replace)
@@ -32,7 +32,7 @@ func replaceText(content string, changeset changeset) string {
 	}
 }
 
-func handleLineInFile(changesets []changeset, buffer bytes.Buffer) (*bytes.Buffer, bool) {
+func HandleLineInFile(changesets []Changeset, buffer bytes.Buffer) (*bytes.Buffer, bool) {
 	var (
 		line              string
 		writeBufferToFile bool

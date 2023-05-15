@@ -28,7 +28,7 @@ func Readln(r *bufio.Reader) (string, error) {
 }
 
 // Write content to file
-func writeContentToFile(fileitem fileitem, content bytes.Buffer) (string, bool) {
+func WriteContentToFile(fileitem Fileitem, content bytes.Buffer) (string, bool) {
 	// --dry-run
 	if opts.DryRun {
 		return content.String(), true
@@ -44,7 +44,7 @@ func writeContentToFile(fileitem fileitem, content bytes.Buffer) (string, bool) 
 }
 
 // search files in path
-func searchFilesInPath(path string, callback func(os.FileInfo, string)) {
+func SearchFilesInPath(path string, callback func(os.FileInfo, string)) {
 	var pathRegex *regexp.Regexp
 
 	// --path-regex
