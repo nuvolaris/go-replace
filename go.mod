@@ -1,4 +1,4 @@
-module github.com/webdevops/go-replace
+module github.com/nuvolaris/go-replace
 
 go 1.19
 
