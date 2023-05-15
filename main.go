@@ -1,4 +1,4 @@
-package main
+package replace
 
 import (
 	"bufio"
@@ -141,7 +141,10 @@ func applyTemplateToFile(fileitem Fileitem, changesets []Changeset) (string, boo
 		return "", false, err
 	}
 
-	content := ParseContentAsTemplate(string(buffer), changesets)
+	content, err := ParseContentAsTemplate(string(buffer), changesets)
+	if err != nil {
+		return "", false, err
+	}
 
 	output, status := WriteContentToFile(fileitem, content)
 
@@ -232,24 +235,24 @@ func buildSearchTerm(term string) *regexp.Regexp {
 //	--version
 //	--path
 //	--mode=...
-func handleSpecialCliOptions(args []string) {
+func handleSpecialCliOptions(args []string) (bool, error) {
 	// --dumpversion
 	if opts.ShowOnlyVersion {
 		fmt.Println(gitTag)
-		os.Exit(0)
+		return true, nil
 	}
 
 	// --version
 	if opts.ShowVersion {
 		fmt.Printf("go-replace version %s (%s)\n", gitTag, gitCommit)
 		fmt.Printf("Copyright (C) 2022 %s\n", Author)
-		os.Exit(0)
+		return true, nil
 	}
 
 	// --help
 	if opts.ShowHelp {
 		argparser.WriteHelp(os.Stdout)
-		os.Exit(0)
+		return true, nil
 	}
 
 	// --mode
@@ -278,18 +281,20 @@ func handleSpecialCliOptions(args []string) {
 
 	// --output
 	if opts.Output != "" && len(args) > 1 {
-		logFatalErrorAndExit(errors.New("Only one file is allowed when using --output"), 1)
+		return true, errors.New("only one file is allowed when using --output")
 	}
 
 	if opts.LineinfileBefore != "" || opts.LineinfileAfter != "" {
 		if !opts.ModeIsLineInFile {
-			logFatalErrorAndExit(errors.New("--lineinfile-after and --lineinfile-before only valid in --mode=lineinfile"), 1)
+			return true, errors.New("--lineinfile-after and --lineinfile-before only valid in --mode=lineinfile")
 		}
 
 		if opts.LineinfileBefore != "" && opts.LineinfileAfter != "" {
-			logFatalErrorAndExit(errors.New("Only --lineinfile-after or --lineinfile-before is allowed in --mode=lineinfile"), 1)
+			return true, errors.New("only --lineinfile-after or --lineinfile-before is allowed in --mode=lineinfile")
 		}
 	}
+
+	return false, nil
 }
 
 func actionProcessStdinReplace(changesets []Changeset) int {
@@ -307,7 +312,7 @@ func actionProcessStdinReplace(changesets []Changeset) int {
 	return 0
 }
 
-func actionProcessStdinTemplate(changesets []Changeset) int {
+func actionProcessStdinTemplate(changesets []Changeset) (int, error) {
 	var buffer bytes.Buffer
 
 	scanner := bufio.NewScanner(os.Stdin)
@@ -315,22 +320,26 @@ func actionProcessStdinTemplate(changesets []Changeset) int {
 		buffer.WriteString(scanner.Text() + "\n")
 	}
 
-	content := ParseContentAsTemplate(buffer.String(), changesets)
+	content, err := ParseContentAsTemplate(buffer.String(), changesets)
+	if err != nil {
+		return 1, err
+	}
+
 	fmt.Print(content.String())
 
-	return 0
+	return 0, nil
 }
 
-func actionProcessFiles(changesets []Changeset, fileitems []Fileitem) int {
+func actionProcessFiles(changesets []Changeset, fileitems []Fileitem) (int, error) {
 	// check if there is at least one file to process
 	if len(fileitems) == 0 {
 		if opts.IgnoreEmpty {
 			// no files found, but we should ignore empty filelist
 			logMessage("No files found, requsted to ignore this")
-			os.Exit(0)
+			return 0, nil
 		} else {
 			// no files found, print error and exit with error code
-			logFatalErrorAndExit(errors.New("No files specified"), 1)
+			return 1, errors.New("No files specified")
 		}
 	}
 
@@ -382,26 +391,26 @@ func actionProcessFiles(changesets []Changeset, fileitems []Fileitem) int {
 
 	if errorCount >= 1 {
 		fmt.Fprintf(os.Stderr, "[ERROR] %s failed with %d error(s)\n", argparser.Command.Name, errorCount)
-		return 1
+		return 1, errors.New("One or more files failed")
 	}
 
-	return 0
+	return 0, nil
 }
 
-func buildChangesets() []Changeset {
+func buildChangesets() ([]Changeset, error) {
 	var changesets []Changeset
 
 	if !opts.ModeIsTemplate {
 		if len(opts.Search) == 0 || len(opts.Replace) == 0 {
 			// error: unequal numbers of search and replace options
-			logFatalErrorAndExit(errors.New("Missing either --search or --replace for this mode"), 1)
+			return nil, errors.New("Missing either --search or --replace for this mode")
 		}
 	}
 
 	// check if search and replace options have equal lenght (equal number of options)
 	if len(opts.Search) != len(opts.Replace) {
 		// error: unequal numbers of search and replace options
-		logFatalErrorAndExit(errors.New("Unequal numbers of search or replace options"), 1)
+		return nil, errors.New("Unequal numbers of search or replace options")
 	}
 
 	// build changesets
@@ -413,7 +422,7 @@ func buildChangesets() []Changeset {
 		changesets = append(changesets, changeset)
 	}
 
-	return changesets
+	return changesets, nil
 }
 
 func buildFileitems(args []string) []Fileitem {
@@ -464,33 +473,47 @@ func buildFileitems(args []string) []Fileitem {
 
 var argparser *flags.Parser
 
-func main() {
+func ReplaceMain() (int, error) {
 	argparser = flags.NewParser(&opts, flags.PassDoubleDash)
 	args, err := argparser.Parse()
 
-	handleSpecialCliOptions(args)
+	shouldExit, err := handleSpecialCliOptions(args)
+	if err != nil {
+		return 1, err
+	} else if shouldExit {
+		return 0, nil
+	}
 
 	// check if there is an parse error
 	if err != nil {
-		logFatalErrorAndExit(err, 1)
+		return 1, err
 	}
 
-	changesets := buildChangesets()
+	changesets, err := buildChangesets()
+	if err != nil {
+		return 1, err
+	}
 	fileitems := buildFileitems(args)
 
 	exitMode := 0
 	if opts.Stdin {
 		if opts.ModeIsTemplate {
 			// use stdin as input
-			exitMode = actionProcessStdinTemplate(changesets)
+			exitMode, err = actionProcessStdinTemplate(changesets)
+			if err != nil {
+				return exitMode, err
+			}
 		} else {
 			// use stdin as input
 			exitMode = actionProcessStdinReplace(changesets)
 		}
 	} else {
 		// use and process files (see args)
-		exitMode = actionProcessFiles(changesets, fileitems)
+		exitMode, err = actionProcessFiles(changesets, fileitems)
+		if err != nil {
+			return exitMode, err
+		}
 	}
 
-	os.Exit(exitMode)
+	return exitMode, nil
 }

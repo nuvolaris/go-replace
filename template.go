@@ -1,4 +1,4 @@
-package main
+package replace
 
 import (
 	"bytes"
@@ -22,20 +22,20 @@ func CreateTemplate() *template.Template {
 	return tmpl
 }
 
-func ParseContentAsTemplate(templateContent string, changesets []Changeset) bytes.Buffer {
+func ParseContentAsTemplate(templateContent string, changesets []Changeset) (bytes.Buffer, error) {
 	var content bytes.Buffer
 	data := generateTemplateData(changesets)
 	tmpl, err := CreateTemplate().Parse(templateContent)
 	if err != nil {
-		logFatalErrorAndExit(err, 1)
+		return content, err
 	}
 
 	err = tmpl.Execute(&content, &data)
 	if err != nil {
-		logFatalErrorAndExit(err, 1)
+		return content, err
 	}
 
-	return content
+	return content, nil
 }
 
 func generateTemplateData(changesets []Changeset) templateData {
